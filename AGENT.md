@@ -168,7 +168,7 @@ Before implementing a task:
 9. Update documentation when necessary.
 
 ## Agent Behavior
-
+- **Do not execute code, run commands, or perform actions unless explicitly instructed by the user.**
 - Do not introduce unrequested features or external frameworks (e.g., LangChain).
 - Do not modify unrelated files.
 - Do not add dependencies without justification.
