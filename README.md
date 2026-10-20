@@ -2,6 +2,10 @@
 
 A lightweight, modular Python application designed to analyze and query legal lease contracts using Retrieval-Augmented Generation (RAG). Built with ChromaDB, OpenAI, and Streamlit, with containerized Docker orchestration.
 
+[![Watch Demo Video](https://cdn.loom.com/sessions/thumbnails/03907b49f69045bebffc7d7642ab4a84-with-play.gif)](https://www.loom.com/share/03907b49f69045bebffc7d7642ab4a84)
+
+> 📹 **Demo Walkthrough**: [Watch the demo on Loom](https://www.loom.com/share/03907b49f69045bebffc7d7642ab4a84)
+
 ---
 
 ## Features
