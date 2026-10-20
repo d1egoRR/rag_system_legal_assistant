@@ -1,9 +1,9 @@
 """
-Unit tests for prompts module templates.
+Unit tests for src/prompts.py module templates.
 """
 
 import pytest
-from prompts import (
+from src.prompts import (
     RAG_TEMPLATE,
     MULTI_QUERY_PROMPT,
     RELEVANCE_PROMPT,

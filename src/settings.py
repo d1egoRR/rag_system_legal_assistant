@@ -7,8 +7,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Base project root directory
-BASE_DIR: Path = Path(__file__).resolve().parent
+# Base project root directory (one level up from src/)
+BASE_DIR: Path = Path(__file__).resolve().parent.parent
 
 # Load environment variables from .env located at the project root
 load_dotenv(BASE_DIR / ".env")
