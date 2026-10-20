@@ -7,8 +7,12 @@ services:
     stdin_open: true
     tty: true
     restart: unless-stopped
+    ports:
+      - "8501:8501"
+    command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
     volumes:
       # Real-time code and configuration synchronization
+      - ./app.py:/app/app.py
       - ./src:/app/src
       - ./scripts:/app/scripts
       - ./tests:/app/tests
