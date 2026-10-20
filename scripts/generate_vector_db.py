@@ -15,6 +15,9 @@ from langchain_community.vectorstores import Chroma
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+# Directorio raíz del proyecto (un nivel arriba de scripts/)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 # Configuración básica de logging estructurado
 logging.basicConfig(
     level=logging.INFO,
@@ -25,7 +28,7 @@ logger = logging.getLogger("generate_vector_db")
 
 
 def create_vector_database(
-    contracts_dir: str = "contratos",
+    contracts_dir: str = "contract_files",
     persist_directory: str = "chroma_db",
     chunk_size: int = 5000,
     chunk_overlap: int = 1000,
@@ -49,7 +52,8 @@ def create_vector_database(
     Returns:
         Chroma: Instancia del vector store configurado y persistido.
     """
-    load_dotenv()
+    # Cargar .env desde la raíz del proyecto
+    load_dotenv(PROJECT_ROOT / ".env")
 
     api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
 
@@ -61,14 +65,34 @@ def create_vector_database(
         logger.error(error_msg)
         raise ValueError(error_msg)
 
+    # Resolución robusta de la ruta de contratos
     contracts_path = Path(contracts_dir)
+    if not contracts_path.is_absolute():
+        if (PROJECT_ROOT / contracts_path).exists():
+            contracts_path = (PROJECT_ROOT / contracts_path).resolve()
+        elif (Path(__file__).resolve().parent / contracts_path).exists():
+            contracts_path = (Path(__file__).resolve().parent / contracts_path).resolve()
+        elif contracts_path.exists():
+            contracts_path = contracts_path.resolve()
+        else:
+            # Compatibilidad si se pasa con prefijo '../' desde la raíz
+            cleaned = str(contracts_dir).replace("../", "")
+            if (PROJECT_ROOT / cleaned).exists():
+                contracts_path = (PROJECT_ROOT / cleaned).resolve()
+            else:
+                contracts_path = (PROJECT_ROOT / contracts_path).resolve()
+
+    # Resolución robusta de persist_directory en la raíz del proyecto
+    persist_path = Path(persist_directory)
+    if not persist_path.is_absolute():
+        persist_path = (PROJECT_ROOT / persist_directory).resolve()
 
     if not contracts_path.exists() or not contracts_path.is_dir():
-        error_msg = f"El directorio de contratos '{contracts_dir}' no existe o no es un directorio válido."
+        error_msg = f"El directorio de contratos '{contracts_path}' no existe o no es un directorio válido."
         logger.error(error_msg)
         raise FileNotFoundError(error_msg)
 
-    logger.info("Iniciando carga de documentos PDF desde '%s'...", contracts_dir)
+    logger.info("Iniciando carga de documentos PDF desde '%s'...", contracts_path)
 
     loader = PyPDFDirectoryLoader(str(contracts_path))
     docs = loader.load()
@@ -95,13 +119,13 @@ def create_vector_database(
         openai_api_key=api_key,
     )
 
-    logger.info("Indexando fragmentos y persistiendo en ChromaDB en '%s'...", persist_directory)
+    logger.info("Indexando fragmentos y persistiendo en ChromaDB en '%s'...", persist_path)
     vector_store = Chroma.from_documents(
         documents=docs_split,
         embedding=embeddings,
-        persist_directory=persist_directory,
+        persist_directory=str(persist_path),
     )
-    logger.info("Vector store creado y persistido exitosamente en '%s'.", persist_directory)
+    logger.info("Vector store creado y persistido exitosamente en '%s'.", persist_path)
 
     if run_sample_query:
         consulta = "¿Donde se encuentra el local del contrato en el que participa Maria Jimenez Campos?"
