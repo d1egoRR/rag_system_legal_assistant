@@ -7,3 +7,14 @@ services:
     stdin_open: true
     tty: true
     restart: unless-stopped
+    volumes:
+      # Real-time code and configuration synchronization
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+      - ./tests:/app/tests
+      - ./contract_files:/app/contract_files
+      - ./.env:/app/.env
+      # Persistent vector database storage on host
+      - ./chroma_db:/app/chroma_db
+    env_file:
+      - .env
