@@ -240,3 +240,24 @@ def test_rag_service_query_handles_exception(monkeypatch):
 
         assert "Error al consultar el sistema RAG: Chroma connection timeout" in answer
         assert sources == []
+
+
+@pytest.mark.unit
+def test_rag_service_get_retriever_info(monkeypatch):
+    """Verify get_retriever_info returns correct configuration metadata."""
+    monkeypatch.setattr("src.settings.ENABLE_HYBRID_SEARCH", True)
+
+    with (
+        patch("src.rag_service.OpenAIEmbeddings"),
+        patch("src.rag_service.Chroma"),
+        patch("src.rag_service.ChatOpenAI"),
+        patch("src.rag_service.MultiQueryRetriever.from_llm"),
+        patch("src.rag_service.EnsembleRetriever"),
+    ):
+        service = RAGService()
+        info = service.get_retriever_info()
+
+        assert "Híbrido" in info["tipo"]
+        assert info["hybrid_search"] is True
+        assert "query_model" in info
+        assert "generation_model" in info

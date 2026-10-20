@@ -194,6 +194,27 @@ class RAGService:
 
         return formatted_sources
 
+    def get_retriever_info(self) -> Dict[str, Any]:
+        """
+        Get metadata regarding the configured retrieval strategy and models.
+
+        Returns:
+            Dictionary containing retriever type description, models, and search parameters.
+        """
+        retriever_type = (
+            "Híbrido (Ensemble: MMR + Similitud)"
+            if self.enable_hybrid_search
+            else f"MMR ({self.search_type.upper()})"
+        )
+        return {
+            "tipo": retriever_type,
+            "search_type": self.search_type,
+            "search_k": self.search_k,
+            "hybrid_search": self.enable_hybrid_search,
+            "query_model": self.query_model,
+            "generation_model": self.generation_model,
+        }
+
     def _init_components(self) -> None:
         """Initialize all internal models, vector stores, retrievers, and generation chains."""
         self.embeddings = self._build_embeddings()
