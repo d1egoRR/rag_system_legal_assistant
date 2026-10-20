@@ -1,10 +1,10 @@
 """
-Unit tests for settings module.
+Unit tests for src/settings.py module.
 """
 
 from pathlib import Path
 import pytest
-import settings
+from src import settings
 
 
 @pytest.mark.unit

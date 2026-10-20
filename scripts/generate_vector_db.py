@@ -9,12 +9,12 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-# Ensure settings can be imported from the project root
+# Ensure src and settings can be imported from the project root
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-import settings
+from src import settings
 
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain_community.vectorstores import Chroma

@@ -20,7 +20,7 @@ def test_create_vector_database_missing_contracts_dir(tmp_path: Path):
 @pytest.mark.unit
 def test_create_vector_database_missing_api_key(monkeypatch):
     """Verify ValueError is raised when no API key is provided or present in settings."""
-    monkeypatch.setattr("settings.OPENAI_API_KEY", "")
+    monkeypatch.setattr("src.settings.OPENAI_API_KEY", "")
     with pytest.raises(ValueError, match="OPENAI_API_KEY not found"):
         create_vector_database(openai_api_key="")
 
