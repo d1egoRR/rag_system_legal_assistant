@@ -26,8 +26,8 @@ def test_create_vector_database_missing_api_key(monkeypatch):
 
 
 @pytest.mark.unit
-def test_create_vector_database_removes_existing_directory(tmp_path: Path):
-    """Verify existing persistence directory is removed prior to vector store generation."""
+def test_create_vector_database_clears_existing_directory(tmp_path: Path):
+    """Verify existing persistence directory contents are cleared prior to vector store generation."""
     test_persist = tmp_path / "existing_chroma_db"
     test_persist.mkdir(parents=True, exist_ok=True)
     marker_file = test_persist / "old_data.sqlite3"

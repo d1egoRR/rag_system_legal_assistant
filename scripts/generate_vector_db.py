@@ -86,13 +86,19 @@ def create_vector_database(
         logger.error(f"{error_msg}")
         raise FileNotFoundError(error_msg)
 
-    # 1. Check if vector DB directory already exists and remove it for a clean rebuild
+    # 1. Check if vector DB directory already exists and clear its contents for a clean rebuild
     if persist_path.exists():
         logger.info(
-            f"Existing vector database directory detected at '{persist_path}'. Removing for clean rebuild..."
+            f"Existing vector database directory detected at '{persist_path}'. Clearing contents for clean rebuild..."
         )
-        shutil.rmtree(persist_path)
-        logger.info("Previous vector database directory removed successfully.")
+        for item in persist_path.iterdir():
+            if item.is_dir():
+                shutil.rmtree(item)
+            else:
+                item.unlink()
+        logger.info("Previous vector database contents removed successfully.")
+    else:
+        persist_path.mkdir(parents=True, exist_ok=True)
 
     # 2. Load PDF documents
     logger.info(f"Loading PDF documents from '{contracts_path}'...")
