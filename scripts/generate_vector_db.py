@@ -1,24 +1,27 @@
 """
-Módulo para vectorizar contratos legales en PDF y almacenarlos
-en una base de datos vectorial Chroma (SQLite).
+Module to vectorize legal PDF contracts and persist them into a Chroma (SQLite) vector database.
 """
 
 import logging
 import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Optional
-from dotenv import load_dotenv
+
+# Ensure settings can be imported from the project root
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+import settings
 
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain_community.vectorstores import Chroma
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# Directorio raíz del proyecto (un nivel arriba de scripts/)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
-# Configuración básica de logging estructurado
+# Configure structured logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -28,118 +31,111 @@ logger = logging.getLogger("generate_vector_db")
 
 
 def create_vector_database(
-    contracts_dir: str = "contract_files",
-    persist_directory: str = "chroma_db",
-    chunk_size: int = 5000,
-    chunk_overlap: int = 1000,
-    embedding_model: str = "text-embedding-3-large",
+    contracts_dir: Optional[str] = None,
+    persist_directory: Optional[str] = None,
+    chunk_size: Optional[int] = None,
+    chunk_overlap: Optional[int] = None,
+    embedding_model: Optional[str] = None,
     openai_api_key: Optional[str] = None,
     run_sample_query: bool = True,
 ) -> Chroma:
     """
-    Carga contratos en formato PDF desde un directorio, divide su contenido
-    en fragmentos y genera una base de datos vectorial persistente con ChromaDB.
+    Load PDF contracts from a directory, split their content into chunks,
+    and persist them into a Chroma vector store.
+    If the vector store already exists, it removes it before generating a fresh one.
 
     Args:
-        contracts_dir: Directorio donde residen los archivos PDF de contratos.
-        persist_directory: Carpeta de destino donde se persistirá la base SQLite de Chroma.
-        chunk_size: Tamaño máximo en caracteres de cada fragmento.
-        chunk_overlap: Solapamiento entre fragmentos consecutivos.
-        embedding_model: Modelo de embeddings de OpenAI a utilizar.
-        openai_api_key: Clave API opcional (si no se especifica, se toma de OPENAI_API_KEY).
-        run_sample_query: Si es True, realiza una consulta de prueba tras la indexación.
+        contracts_dir: Directory containing PDF contracts. Defaults to settings.CONTRACTS_DIR.
+        persist_directory: Destination path for Chroma DB. Defaults to settings.CHROMA_DB_PATH.
+        chunk_size: Maximum character chunk size. Defaults to settings.CHUNK_SIZE.
+        chunk_overlap: Character overlap between consecutive chunks. Defaults to settings.CHUNK_OVERLAP.
+        embedding_model: OpenAI embedding model name. Defaults to settings.EMBEDDING_MODEL.
+        openai_api_key: Optional API key override. Defaults to settings.OPENAI_API_KEY.
+        run_sample_query: If True, executes a sample similarity query after indexing.
 
     Returns:
-        Chroma: Instancia del vector store configurado y persistido.
+        Chroma: Configured and persisted vector store instance.
     """
-    # Cargar .env desde la raíz del proyecto
-    load_dotenv(PROJECT_ROOT / ".env")
-
-    api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
-
+    api_key = openai_api_key or settings.OPENAI_API_KEY
     if not api_key:
         error_msg = (
-            "No se encontró la clave OPENAI_API_KEY. "
-            "Configúrala en el archivo .env o pásala como parámetro."
+            "OPENAI_API_KEY not found. "
+            "Please configure it in your .env file or pass it as an argument."
         )
-        logger.error(error_msg)
+        logger.error(f"{error_msg}")
         raise ValueError(error_msg)
 
-    # Resolución robusta de la ruta de contratos
-    contracts_path = Path(contracts_dir)
+    # Resolve contracts directory
+    c_dir = contracts_dir or str(settings.CONTRACTS_DIR)
+    contracts_path = Path(c_dir)
     if not contracts_path.is_absolute():
-        if (PROJECT_ROOT / contracts_path).exists():
-            contracts_path = (PROJECT_ROOT / contracts_path).resolve()
-        elif (Path(__file__).resolve().parent / contracts_path).exists():
-            contracts_path = (Path(__file__).resolve().parent / contracts_path).resolve()
-        elif contracts_path.exists():
-            contracts_path = contracts_path.resolve()
-        else:
-            # Compatibilidad si se pasa con prefijo '../' desde la raíz
-            cleaned = str(contracts_dir).replace("../", "")
-            if (PROJECT_ROOT / cleaned).exists():
-                contracts_path = (PROJECT_ROOT / cleaned).resolve()
-            else:
-                contracts_path = (PROJECT_ROOT / contracts_path).resolve()
+        contracts_path = (PROJECT_ROOT / contracts_path).resolve()
 
-    # Resolución robusta de persist_directory en la raíz del proyecto
-    persist_path = Path(persist_directory)
+    # Resolve persist directory
+    p_dir = persist_directory or str(settings.CHROMA_DB_PATH)
+    persist_path = Path(p_dir)
     if not persist_path.is_absolute():
-        persist_path = (PROJECT_ROOT / persist_directory).resolve()
+        persist_path = (PROJECT_ROOT / persist_path).resolve()
+
+    c_size = chunk_size or settings.CHUNK_SIZE
+    c_overlap = chunk_overlap or settings.CHUNK_OVERLAP
+    emb_model = embedding_model or settings.EMBEDDING_MODEL
 
     if not contracts_path.exists() or not contracts_path.is_dir():
-        error_msg = f"El directorio de contratos '{contracts_path}' no existe o no es un directorio válido."
-        logger.error(error_msg)
+        error_msg = f"Contracts directory '{contracts_path}' does not exist or is not a valid directory."
+        logger.error(f"{error_msg}")
         raise FileNotFoundError(error_msg)
 
-    logger.info("Iniciando carga de documentos PDF desde '%s'...", contracts_path)
+    # 1. Check if vector DB directory already exists and remove it for a clean rebuild
+    if persist_path.exists():
+        logger.info(
+            f"Existing vector database directory detected at '{persist_path}'. Removing for clean rebuild..."
+        )
+        shutil.rmtree(persist_path)
+        logger.info("Previous vector database directory removed successfully.")
 
+    # 2. Load PDF documents
+    logger.info(f"Loading PDF documents from '{contracts_path}'...")
     loader = PyPDFDirectoryLoader(str(contracts_path))
     docs = loader.load()
+    logger.info(f"Loaded {len(docs)} document pages from '{contracts_path}'.")
 
-    logger.info("Se cargaron %d páginas de documentos desde '%s'.", len(docs), contracts_dir)
-
+    # 3. Chunk documents
     logger.info(
-        "Dividiendo documentos en fragmentos (chunk_size=%d, chunk_overlap=%d)...",
-        chunk_size,
-        chunk_overlap,
+        f"Splitting documents into chunks (chunk_size={c_size}, chunk_overlap={c_overlap})..."
     )
-
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
+        chunk_size=c_size,
+        chunk_overlap=c_overlap,
     )
-
     docs_split = text_splitter.split_documents(docs)
-    logger.info("Se crearon %d fragmentos tras la división.", len(docs_split))
+    logger.info(f"Created {len(docs_split)} chunks after splitting.")
 
-    logger.info("Inicializando cliente de embeddings con modelo '%s'...", embedding_model)
+    # 4. Initialize embedding model
+    logger.info(f"Initializing embedding client with model '{emb_model}'...")
     embeddings = OpenAIEmbeddings(
-        model=embedding_model,
+        model=emb_model,
         openai_api_key=api_key,
     )
 
-    logger.info("Indexando fragmentos y persistiendo en ChromaDB en '%s'...", persist_path)
+    # 5. Persist to ChromaDB
+    logger.info(f"Indexing chunks and persisting to ChromaDB at '{persist_path}'...")
     vector_store = Chroma.from_documents(
         documents=docs_split,
         embedding=embeddings,
         persist_directory=str(persist_path),
     )
-    logger.info("Vector store creado y persistido exitosamente en '%s'.", persist_path)
+    logger.info(f"Vector store successfully created and persisted at '{persist_path}'.")
 
+    # 6. Optional sample similarity query
     if run_sample_query:
-        consulta = "¿Donde se encuentra el local del contrato en el que participa Maria Jimenez Campos?"
-        logger.info("Ejecutando búsqueda semántica de prueba: '%s'", consulta)
-        resultados = vector_store.similarity_search(consulta, k=2)
-        logger.info("Resultados de prueba obtenidos: %d", len(resultados))
-        
-        for i, doc in enumerate(resultados, start=1):
+        sample_query = "¿Donde se encuentra el local del contrato en el que participa Maria Jimenez Campos?"
+        logger.info(f"Running sample similarity search: '{sample_query}'")
+        results = vector_store.similarity_search(sample_query, k=settings.SEARCH_K)
+        logger.info(f"Sample query results retrieved: {len(results)}")
+        for i, doc in enumerate(results, start=1):
             logger.info(
-                "Resultado %d:\nMetadatos: %s\nContenido:\n%s\n%s",
-                i,
-                doc.metadata,
-                doc.page_content,
-                "-" * 60,
+                f"Result {i}:\nMetadata: {doc.metadata}\nContent:\n{doc.page_content}\n{'-' * 60}"
             )
 
     return vector_store
@@ -149,5 +145,5 @@ if __name__ == "__main__":
     try:
         create_vector_database()
     except Exception as exc:
-        logger.critical("Fallo en la ejecución de create_vector_database: %s", exc, exc_info=True)
+        logger.critical(f"Vector database generation failed: {exc}", exc_info=True)
         sys.exit(1)
