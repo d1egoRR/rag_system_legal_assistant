@@ -1,0 +1,9 @@
+services:
+  rag-legal-assistant:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag_legal_assistant
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
